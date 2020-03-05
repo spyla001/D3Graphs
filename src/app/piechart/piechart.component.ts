@@ -10,133 +10,132 @@ import {Item} from '../item.interface';
 export class PiechartComponent implements OnInit {
 
   @Input() data: Item[];
+  @Input() svgHeight: number;
+  @Input() svgWidth: number;
+  @Input() radius: number;
 
-  svgDims = {
-    width: 900,
-    height: 900
-  };
-
-  margin = {
-    top: 2,
-    right: 20,
-    bottom: 70,
-    left: 70
-  };
-
-graphWidth = this.svgDims.width - this.margin.left - this.margin.right;
-graphHeight = this.svgDims.height - this.margin.top - this.margin.bottom;
-
-
-
+  cent;
   constructor() { }
 
   ngOnInit() {
-    this.createBar(this.data);
+    this.cent = { x: (this.svgWidth / 2 + 5), y: (this.svgHeight / 2 + 5)};
+    this.createPieChart(this.data);
   }
 
+  createPieChart(data: any) {
+    const svg = d3.select('.piechart')
+      .append('svg')
+      .attr('height', this.svgHeight + 10)
+      .attr('width', this.svgWidth + 150);
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
 
-
-
-  createBar(data) {
-    const svg = d3.select('body').append('svg')
-      .attr('width', this.svgDims.width)
-      .attr('height', this.svgDims.height);
     const graph = svg.append('g')
-      .attr('width', this.graphWidth)
-      .attr('height', this.graphHeight)
-      .attr('fill', 'green')
-      .attr('transform', `translate(${this.margin.left},${this.margin.top})`);
-
-    const xAxisgroup = graph.append('g')
-      .attr('transform', `translate(${0},${this.graphHeight})`)
-      .attr('class', 'grid');
+      .attr('transform', `translate(${this.cent.x},${this.cent.y})`);
 
 
-    const yAxisgrooup = graph.append('g')
-      .attr('class', 'grid');
+    const pie = d3.pie()
+      .sort(null)
+      .value((d: any) => d.orders);
 
 
-    const y = d3.scaleLinear()
-      .range([this.graphHeight, 0]);
+
+    const arc = d3.arc()
+      .outerRadius(this.radius)
+      .innerRadius(this.radius / 6);
+
+    console.log((pie(data)));
+
+    const legend = svg.append('g')
+      .attr('transform', `translate(${this.svgWidth + 10},0)`)
+      .attr('height', 100)
+      .attr('width', 100);
 
 
-    const x = d3.scaleBand()
-      .range([0, this.graphWidth])
-      .paddingInner(0.7)
-      .paddingOuter(0.7);
-
-    const xAxis = d3.axisBottom(x)
-      .tickSize(-this.svgDims.height);
-
-    const yAxis = d3.axisLeft(y)
-      .ticks(10)
-      .tickSize(-this.svgDims.width)
-      .tickFormat(d => `orders ${d}`);
 
 
-    // tslint:disable-next-line:no-shadowed-variable
-    const update = (data: Item[]) =>  {
-      const  domainVar = data.map(d => d.name);
+    const update = (d: Item[]) => {
+      const domain = d.map(dom => dom.name);
 
-      // @ts-ignore
-      const color = d3.scaleOrdinal(d3.schemeCategory10)
-        // tslint:disable-next-line:no-shadowed-variable variable-name
-        .domain( domainVar);
+      color.domain(domain);
 
-
-      // join updated data to elements::
-      const rect = graph.selectAll('rect').data(data);
-      console.log(rect);
-      // remove unwanted shapes from dom
-      rect.exit().remove();
-
-      // update the domains
-      y.domain([0, d3.max(data, d => d.orders)]);
-      x.domain(data.map(d => d.name));
-
-      // add attrs to rects already in the DOM
-      rect.attr('width', x.bandwidth)
-        .attr('fill', d => color(d.name))
-        .attr('x', d => x(d.name))
-        .transition().duration(1500)
-        .attr('height', d => this.graphHeight - y(d.orders))
-        .attr('y', d => y(d.orders));
+      const chart = graph.selectAll('g')
+        .data(pie(data))
+        .enter()
+        .append('g')
+        .attr('class','slice')
 
 
-      // append enter selection of dom
-      rect.enter()
-        .append('rect')
-        .attr('width', x.bandwidth)
-        .attr('fill', d => color(d.name))
-        .attr('x', (d) => x(d.name))
-        .attr('height', 0)
-        .attr('y', this.graphHeight)
-        .transition().duration(1500)
-        .attrTween('width', widthTween)
-        .attr('height', d => this.graphHeight - y(d.orders))
-        .attr('y', d => y(d.orders));
 
-      xAxisgroup.call(xAxis);
+      chart.exit().remove();
 
-      yAxisgrooup.call(yAxis);
 
-      xAxisgroup.selectAll('text')
-        .attr('transform', 'rotate(-40)')
-        .attr('text-anchor', 'end');
-      xAxisgroup.selectAll('line')
-        .attr('');
-    };
-
-    const widthTween  = () => {
-      const i  = d3.interpolate(0, x.bandwidth());
-
-      return (t) => {
-        return i(t);
+      const arcTweenEnter = (d) => {
+        const i = d3.interpolate(d.endAngle, d.startAngle);
+        return (t) => {
+          d.startAngle = i(t);
+          return arc(d).toString();
+        };
       };
+
+      chart.append('path')
+        .attr('d', (datum: any) => arc(datum))
+        .attr('class', 'arc')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 3)
+        .attr('fill', (datum: any, index) => color(datum.data.name))
+        .transition().duration(750)
+        .attrTween('d', arcTweenEnter);
+
+      chart.append('text')
+        .attr(
+          'transform',
+          (d: any) => {
+            d.innerRadius = 0;
+            d.outerRadius = 0;
+            const c  = arc.centroid(d);
+            return 'translate(' + c[0] + ',' + c[1] + ')';
+          })
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'central')
+        .style('font-size', '20px')
+        .style('text-decoration', 'bold')
+        .text((d: any) => d.data.orders);
+
+      const legends = legend.selectAll('rect')
+        .data(data);
+      console.log(legends);
+      legends.enter()
+        .append('rect')
+        .attr('fill', (d: any) => color(d.name))
+        .attr('height', 10)
+        .attr('width', 10)
+        .attr('y', (d, i) => i * 20);
+      const legendText = legend.selectAll('text')
+        .data(data);
+      // @ts-ignore
+      legendText.enter()
+        .append('text')
+        .attr('transform', `translate(12,10)`)
+        .attr('fill', (d: any) => color(d.name))
+        .text((d: any) => d.name)
+        .attr('y', (d, i) => i * 20);
+
     };
+    update(data);
+    const handleMouseOver = (d, i, n) => {
+      const element = d3.select(d3.event.target);
+      console.log(element);
+      element.style('opacity', 0.5);
+    };
+
+    const handleMouseOut = (d, i, n) => {
+      const element = d3.select(d3.event.target);
+      console.log(element);
+      element.style('opacity', 1);
+    };
+
+    graph.selectAll('path')
+      .on('mouseover', handleMouseOver)
+      .on('mouseout', handleMouseOut);
   }
-
-
-
-
 }

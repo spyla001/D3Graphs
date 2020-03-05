@@ -13,7 +13,7 @@ export class DatastroeService {
   constructor(private httpClient: HttpClient) {
   }
 
-  public getData() {
+  public getData(): Observable<Item[]> {
     return this.httpClient.get<Item[]>(`${this.Url}/getUnion`);
   }
 }
